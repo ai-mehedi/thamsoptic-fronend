@@ -1,52 +1,58 @@
-"use client"
+"use client";
 
-import type React from "react"
+import type React from "react";
 
-import { useState } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { CreditCard, User, ArrowRight } from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
+import { useState } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { CreditCard, User, ArrowRight } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 export function PayBillModal() {
-  const [subscriptionId, setSubscriptionId] = useState("")
-  const [isProcessing, setIsProcessing] = useState(false)
-  const { toast } = useToast()
+  const [subscriptionId, setSubscriptionId] = useState("");
+  const [isProcessing, setIsProcessing] = useState(false);
+  const { toast } = useToast();
 
   const handlePayment = async (e: React.FormEvent) => {
-    e.preventDefault()
+    e.preventDefault();
 
     if (!subscriptionId.trim()) {
       toast({
         title: "Subscription ID Required",
         description: "Please enter your subscription ID",
         variant: "destructive",
-      })
-      return
+      });
+      return;
     }
 
-    setIsProcessing(true)
+    setIsProcessing(true);
 
     // Simulate payment processing
-    await new Promise((resolve) => setTimeout(resolve, 2000))
+    await new Promise((resolve) => setTimeout(resolve, 2000));
 
     toast({
       title: "Payment Initiated",
       description: "You will be redirected to the payment gateway",
-    })
+    });
 
-    setIsProcessing(false)
-    setSubscriptionId("")
-  }
+    setIsProcessing(false);
+    setSubscriptionId("");
+  };
 
   return (
     <Dialog>
       <DialogTrigger asChild>
         <Button
           variant="outline"
-          className="border-white text-white hover:bg-white hover:text-royal-blue bg-transparent"
+          className="  bg-yellow-500 text-royal-blue "
         >
           <CreditCard className="h-4 w-4 mr-2" />
           Pay Bill
@@ -58,7 +64,9 @@ export function PayBillModal() {
             <div className="w-16 h-16 mx-auto mb-4 bg-blue-100 rounded-2xl flex items-center justify-center">
               <CreditCard className="h-8 w-8 text-blue-600" />
             </div>
-            <DialogTitle className="text-2xl font-bold text-gray-900">Quick Pay</DialogTitle>
+            <DialogTitle className="text-2xl font-bold text-gray-900">
+              Quick Pay
+            </DialogTitle>
           </DialogHeader>
 
           <form onSubmit={handlePayment} className="space-y-6">
@@ -117,5 +125,5 @@ export function PayBillModal() {
         </div>
       </DialogContent>
     </Dialog>
-  )
+  );
 }

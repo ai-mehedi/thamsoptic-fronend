@@ -1,25 +1,53 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { AdminLayout } from "@/components/admin-layout"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Search, Eye, Edit, Trash2 } from "lucide-react"
-import { mockUsers } from "@/lib/mock-data"
+import { useEffect, useState } from "react";
+import { AdminLayout } from "@/components/admin-layout";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Search, Eye, Edit, Trash2 } from "lucide-react";
+import { mockUsers } from "@/lib/mock-data";
+
+type User = {
+  id: string | number;
+  fullname: string;
+  email: string;
+  phone: string;
+  address: string;
+};
 
 export default function UsersPage() {
-  const [searchTerm, setSearchTerm] = useState("")
-  const [users] = useState(mockUsers)
+  const [searchTerm, setSearchTerm] = useState("");
+  const [users, setUsers] = useState<User[]>([]);
+
+  useEffect(() => {
+    const fetchUsers = async () => {
+      const getalluser = await fetch("/api/users");
+      if (!getalluser.ok) {
+        throw new Error("Failed to fetch users");
+      }
+      const data = await getalluser.json();
+      setUsers(data);
+    };
+    fetchUsers();
+  }, []);
 
   const filteredUsers = users.filter(
     (user) =>
-      user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.package.toLowerCase().includes(searchTerm.toLowerCase()),
-  )
+      user.fullname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.phone?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.address?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
     <AdminLayout>
@@ -27,14 +55,18 @@ export default function UsersPage() {
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Users</h1>
-            <p className="text-gray-600">Manage customer accounts and subscriptions</p>
+            <p className="text-gray-600">
+              Manage customer accounts and subscriptions
+            </p>
           </div>
         </div>
 
         <Card className="shadow-card">
           <CardHeader>
             <div className="flex justify-between items-center">
-              <CardTitle className="text-royal-blue">All Users ({filteredUsers.length})</CardTitle>
+              <CardTitle className="text-royal-blue">
+                All Users ({filteredUsers.length})
+              </CardTitle>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <Input
@@ -53,31 +85,22 @@ export default function UsersPage() {
                   <TableRow>
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
-                    <TableHead>Package</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Join Date</TableHead>
-                    <TableHead>Last Payment</TableHead>
+
+                    <TableHead>phone</TableHead>
+                    <TableHead>Address</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredUsers.map((user) => (
-                    <TableRow key={user.id}>
-                      <TableCell className="font-medium">{user.name}</TableCell>
-                      <TableCell>{user.email}</TableCell>
-                      <TableCell>{user.package}</TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={user.status === "Active" ? "default" : "destructive"}
-                          className={
-                            user.status === "Active" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
-                          }
-                        >
-                          {user.status}
-                        </Badge>
+                  {filteredUsers.map((user, index) => (
+                    <TableRow key={index}>
+                      <TableCell className="font-medium">
+                        {user.fullname}
                       </TableCell>
-                      <TableCell>{new Date(user.joinDate).toLocaleDateString()}</TableCell>
-                      <TableCell>{new Date(user.lastPayment).toLocaleDateString()}</TableCell>
+                      <TableCell>{user.email}</TableCell>
+
+                      <TableCell>{user.phone} </TableCell>
+                      <TableCell>{user.address}</TableCell>
                       <TableCell>
                         <div className="flex space-x-2">
                           <Button variant="ghost" size="icon">
@@ -100,5 +123,5 @@ export default function UsersPage() {
         </Card>
       </div>
     </AdminLayout>
-  )
+  );
 }

@@ -6,8 +6,8 @@ import { useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { useAuth } from "@/lib/auth"
 import { LayoutDashboard, Users, Package, ShoppingCart, MessageSquare, Menu, X, LogOut, Wifi } from "lucide-react"
+import { signOut, useSession } from "next-auth/react";
 
 const sidebarItems = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
@@ -21,17 +21,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
-  const { user, logout } = useAuth()
-
-  const handleLogout = () => {
-    logout()
-    router.push("/login")
-  }
-
-  if (!user || user.role !== "admin") {
-    router.push("/login")
-    return null
-  }
+ const { data: session } = useSession()
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -78,10 +68,9 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
         <div className="absolute bottom-0 left-0 right-0 p-6 border-t">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-900">{user.name}</p>
-              <p className="text-xs text-gray-500">{user.email}</p>
+              <p className="text-sm font-medium text-gray-900">{session?.user.name}</p>
             </div>
-            <Button variant="ghost" size="icon" onClick={handleLogout}>
+            <Button variant="ghost" size="icon"  onClick={() => signOut({ callbackUrl: "/login" })}>
               <LogOut className="h-4 w-4" />
             </Button>
           </div>
@@ -97,7 +86,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
           </Button>
 
           <div className="flex items-center space-x-4">
-            <span className="text-gray-600">Welcome back, {user.name}</span>
+            <span className="text-gray-600">Welcome back, {session?.user.name}</span>
           </div>
         </div>
 

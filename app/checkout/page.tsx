@@ -1,245 +1,564 @@
-"use client"
+"use client";
 
-import type React from "react"
+import React, { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
+import { useSearchParams, useRouter } from "next/navigation";
+import { create } from "domain";
+import GoCardlessPayButton from "@/components/GoCardlessPayButton";
 
-import { useEffect, useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Separator } from "@/components/ui/separator"
-import { useToast } from "@/hooks/use-toast"
-import { useRouter } from "next/navigation"
-import { CreditCard, Shield, Check } from "lucide-react"
+interface Addon {
+  name: string;
+  price: number;
+  monthly?: boolean;
+}
 
-const packageDetails = {
-  essential: { name: "Essential", speed: "50 Mbps", price: 25 },
-  popular: { name: "Popular", speed: "150 Mbps", price: 35 },
-  superfast: { name: "Superfast", speed: "500 Mbps", price: 45 },
-  ultrafast: { name: "Ultrafast", speed: "1 Gbps", price: 55 },
+interface Package {
+  _id: string;
+  title: string;
+  price: number;
+  downloadSpeed?: string;
+  description?: string;
+  subscriptionprice?: number;
+}
+
+const addons: Record<string, Addon> = {
+  router: { name: "Router", price: 9.99 },
+  staticIp: { name: "Static IP", price: 2, monthly: true },
+};
+
+interface Order {
+  userId: string;
+  packageId: string;
+  fullName: string;
+  email: string;
+  phone: string;
+  password: string;
+  address: string;
+  subscriptionId: string;
+  router: boolean;
+  staticIp: boolean;
+  status: "pending" | "active" | "cancelled";
+  paymentStatus: "unpaid" | "paid" | "failed";
+  totalAmount: number;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export default function CheckoutPage() {
-  const [selectedPackage, setSelectedPackage] = useState<string | null>(null)
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const packageId = searchParams.get("package") || "popular";
+
+  const [selectedPackage, setSelectedPackage] = useState<Package>();
+  const [selectedAddons, setSelectedAddons] = useState<Record<string, boolean>>(
+    {
+      router: false,
+      staticIp: false,
+    }
+  );
+
   const [customerInfo, setCustomerInfo] = useState({
-    firstName: "",
-    lastName: "",
+    fullName: "",
     email: "",
+    password: "",
     phone: "",
     address: "",
-  })
-  const [isProcessing, setIsProcessing] = useState(false)
-  const { toast } = useToast()
-  const router = useRouter()
+  });
+
+  const [promoCode, setPromoCode] = useState("");
+  const [discount, setDiscount] = useState(0);
+  const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    const packageId = sessionStorage.getItem("selectedPackage")
-    if (packageId && packageId in packageDetails) {
-      setSelectedPackage(packageId)
-    } else {
-      router.push("/packages")
-    }
-  }, [router])
+    const selectPackageById = async (id: string) => {
+      const response = await fetch(`/api/packages/${id}`);
+      if (!response.ok) {
+        setError("Failed to fetch package");
+        return;
+      }
+      const data = await response.json();
+      setSelectedPackage(data);
+    };
+    selectPackageById(packageId);
+  }, [packageId]);
 
-  const handleInputChange = (field: string, value: string) => {
-    setCustomerInfo((prev) => ({ ...prev, [field]: value }))
+  useEffect(() => {
+    function onMessage(event: MessageEvent) {
+      if (event.origin !== window.origin) return;
+
+      if (event.data.status === "success") {
+        alert("Payment completed successfully!");
+        // Reload or update UI here if needed
+      }
+    }
+
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, []);
+
+  const calculatePrices = () => {
+    const basePrice = selectedPackage?.price ?? 0;
+
+    // Router is one-time price
+    const routerPrice = selectedAddons.router ? addons.router.price : 0;
+
+    // Static IP is monthly subscription price
+    const staticIpPrice = selectedAddons.staticIp ? addons.staticIp.price : 0;
+
+    // Subscription subtotal includes base package + static IP monthly price
+    const subscriptionSubtotal = basePrice + staticIpPrice;
+
+    // Discount applies only to subscription subtotal (not one-time router fee)
+    const discountedSubscriptionPrice = subscriptionSubtotal * (1 - discount);
+
+    // Total includes discounted subscription + router one-time fee
+    const total = discountedSubscriptionPrice + routerPrice;
+
+    return {
+      subscriptionSubtotal,
+      discountedSubscriptionPrice,
+      routerPrice,
+      total,
+    };
+  };
+
+  const {
+    subscriptionSubtotal,
+    discountedSubscriptionPrice,
+    routerPrice,
+    total,
+  } = calculatePrices();
+
+  async function startPayment(
+    userid: string,
+    packageId: string,
+    subscriptionId: string,
+    orderId: string
+  ) {
+    try {
+      const res = await fetch("/api/gocardless/create-redirect-flow", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: total,
+          email: customerInfo.email,
+          firstName: customerInfo.fullName.split(" ")[0],
+          lastName: customerInfo.fullName.split(" ")[1] || "",
+          description: selectedPackage?.title || "Order Payment",
+          userid: userid,
+          packageId: packageId,
+          subscriptionId:subscriptionId,
+          orderId:orderId,
+        }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        alert("Failed to start payment: " + JSON.stringify(data));
+        return;
+      }
+
+      const popup = window.open(
+        data.redirectUrl,
+        "GoCardlessPayment",
+        "width=600,height=700"
+      );
+
+      if (!popup) {
+        alert("Please enable popups for this site");
+      }
+    } catch (err) {
+      alert("Error starting payment: " + err);
+    }
   }
+  // Calculate prices
+
+  // This is the toggleAddon function
+  const toggleAddon = (key: string) => {
+    setSelectedAddons((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
+  };
+
+  const handleInputChange = (
+    field: keyof typeof customerInfo,
+    value: string
+  ) => {
+    setCustomerInfo((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const applyPromo = () => {
+    if (promoCode.toLowerCase() === "save25") {
+      setDiscount(0.25);
+      setError("");
+    } else {
+      setDiscount(0);
+      setError("Invalid promo code");
+    }
+  };
+
+  const isFormValid = Object.values(customerInfo).every(
+    (value) => value.trim() !== ""
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsProcessing(true)
+    e.preventDefault();
+    setError("");
 
-    // Simulate payment processing
-    await new Promise((resolve) => setTimeout(resolve, 2000))
+    if (!isFormValid) {
+      setError("Please fill in all required fields");
+      return;
+    }
 
-    // Generate subscription ID
-    const subscriptionId = `SUB-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`
+    setIsLoading(true);
 
-    // Store order details
-    sessionStorage.setItem(
-      "orderDetails",
-      JSON.stringify({
-        subscriptionId,
-        package: selectedPackage,
-        customer: customerInfo,
-        orderDate: new Date().toISOString(),
-      }),
-    )
+    try {
+      const userssignup = {
+        fullname: customerInfo.fullName,
+        email: customerInfo.email,
+        password: customerInfo.password,
+        phone: customerInfo.phone,
+        address: customerInfo.address,
+      };
 
-    toast({
-      title: "Order Confirmed!",
-      description: `Your subscription ID is ${subscriptionId}`,
-    })
+      // Send user signup data to backend
+      const signupResponse = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(userssignup),
+      });
+      if (!signupResponse.ok) {
+        throw new Error("User signup failed");
+      }
+      const signupResult = await signupResponse.json();
 
-    router.push("/confirmation")
-  }
+      const subscription = {
+        userId: signupResult.user._id, // Assuming the signup response contains user ID
+        packageId: selectedPackage?._id,
+        baseAmount: selectedPackage?.price || 0,
+        staticIp: selectedAddons.staticIp,
+        totalPrice: subscriptionSubtotal,
+      };
+      const subscriptionResponse = await fetch("/api/subscriptions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(subscription),
+      });
 
-  if (!selectedPackage) {
-    return <div>Loading...</div>
-  }
+      if (!subscriptionResponse.ok) {
+        throw new Error("Subscription creation failed");
+      }
+      const subscriptionResult = await subscriptionResponse.json();
 
-  const pkg = packageDetails[selectedPackage as keyof typeof packageDetails]
+      // Prepare order payload
+      const orderPayload = {
+        userId: signupResult.user._id, // Assuming the signup response contains user ID
+        packageId: selectedPackage?._id,
+        subscriptionId: subscriptionResult._id,
+        fullName: customerInfo.fullName,
+        email: customerInfo.email,
+        password: customerInfo.password,
+        phone: customerInfo.phone,
+        address: customerInfo.address,
+        router: selectedAddons.router,
+        staticIp: selectedAddons.staticIp,
+        totalAmount: total,
+        status: "pending",
+        paymentStatus: "unpaid",
+      };
+
+      // Send order to backend
+      const orderResponse = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(orderPayload),
+      });
+
+      if (!orderResponse.ok) {
+        throw new Error("Order submission failed");
+      }
+
+      const orderResult = await orderResponse.json();
+      console.log(
+        "Order Result:",
+        signupResult.user._id,
+        subscriptionResult._id,
+        orderResult.order._id
+      );
+
+      if (selectedPackage) {
+        startPayment(
+          signupResult.user._id,
+          selectedPackage._id,
+          subscriptionResult._id,
+          orderResult.order._id
+        );
+      }
+    } catch (err) {
+      setError((err as Error).message || "Failed to process order");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
-    <main className="min-h-screen py-24 bg-gray-50">
-      <div className="container mx-auto px-4 max-w-4xl">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-royal-blue mb-2">Complete Your Order</h1>
-          <p className="text-gray-600">You're just one step away from superfast broadband</p>
-        </div>
+    <main className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6">
+      <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Left side - Packages & Addons */}
+        <section className="col-span-2 bg-white p-6 sm:p-8 rounded-md shadow-md">
+          <h2 className="text-2xl font-semibold mb-6">Complete Your Order</h2>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Order Summary */}
-          <Card className="shadow-card">
-            <CardHeader>
-              <CardTitle className="text-royal-blue">Order Summary</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex justify-between items-center">
-                <div>
-                  <h3 className="font-semibold">{pkg.name} Package</h3>
-                  <p className="text-sm text-gray-600">{pkg.speed} broadband</p>
-                </div>
-                <div className="text-right">
-                  <div className="text-xl font-bold text-royal-blue">£{pkg.price}/month</div>
-                </div>
+          {/* Selected Package */}
+          <div className="mb-8 p-4 border border-blue-200 bg-blue-50 rounded-lg">
+            <h3 className="text-lg font-semibold mb-2">
+              Your Selected Package
+            </h3>
+            <div className="flex justify-between items-center">
+              <div>
+                <p className="font-medium">{selectedPackage?.title}</p>
+                {selectedPackage?.downloadSpeed && (
+                  <p className="text-sm text-gray-600">
+                    {selectedPackage.downloadSpeed} Download Speed
+                  </p>
+                )}
               </div>
+              <p className="font-semibold">
+                £{selectedPackage?.price.toFixed(2)}/month
+              </p>
+            </div>
+          </div>
 
-              <Separator />
+          {/* Add-ons */}
+          <div className="mb-8">
+            <h3 className="text-lg font-semibold mb-4">Network Options</h3>
+            <div className="space-y-3">
+              {/* Router Option */}
+              <label
+                htmlFor="addon-router"
+                className={`flex items-center justify-between p-4 border rounded-lg transition-all cursor-pointer shadow-sm ${
+                  selectedAddons.router
+                    ? "border-blue-500 bg-blue-50"
+                    : "border-gray-300 hover:border-blue-400 bg-white"
+                }`}
+              >
+                <div className="flex items-center gap-4">
+                  <span className="text-blue-500 text-2xl">📶</span>
+                  <div>
+                    <div className="font-medium text-gray-900">
+                      {addons.router.name}
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      High-performance wireless router
+                    </div>
+                    <div className="text-sm font-semibold text-gray-700 mt-1">
+                      £{addons.router.price.toFixed(2)} one-time
+                    </div>
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  id="addon-router"
+                  checked={selectedAddons.router}
+                  onChange={() => toggleAddon("router")}
+                  className="w-5 h-5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                />
+              </label>
 
-              <div className="space-y-2">
-                <div className="flex items-center text-sm text-gray-600">
-                  <Check className="h-4 w-4 text-green-500 mr-2" />
-                  Unlimited data usage
+              {/* Static IP Option */}
+              <label
+                htmlFor="addon-staticIp"
+                className={`flex items-center justify-between p-4 border rounded-lg transition-all cursor-pointer shadow-sm ${
+                  selectedAddons.staticIp
+                    ? "border-blue-500 bg-blue-50"
+                    : "border-gray-300 hover:border-blue-400 bg-white"
+                }`}
+              >
+                <div className="flex items-center gap-4">
+                  <span className="text-blue-500 text-2xl">🌐</span>
+                  <div>
+                    <div className="font-medium text-gray-900">
+                      {addons.staticIp.name}
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      Fixed public IP address
+                    </div>
+                    <div className="text-sm font-semibold text-gray-700 mt-1">
+                      £{addons.staticIp.price.toFixed(2)}/month
+                    </div>
+                  </div>
                 </div>
-                <div className="flex items-center text-sm text-gray-600">
-                  <Check className="h-4 w-4 text-green-500 mr-2" />
-                  Unlimited UK landline calls
-                </div>
-                <div className="flex items-center text-sm text-gray-600">
-                  <Check className="h-4 w-4 text-green-500 mr-2" />
-                  Free installation
-                </div>
-                <div className="flex items-center text-sm text-gray-600">
-                  <Check className="h-4 w-4 text-green-500 mr-2" />
-                  24/7 customer support
-                </div>
-              </div>
-
-              <Separator />
-
-              <div className="flex justify-between items-center font-semibold">
-                <span>Total per month:</span>
-                <span className="text-xl text-royal-blue">£{pkg.price}</span>
-              </div>
-
-              <div className="bg-green-50 p-4 rounded-lg">
-                <div className="flex items-center text-green-700">
-                  <Shield className="h-5 w-5 mr-2" />
-                  <span className="font-semibold">Price Lock Guarantee</span>
-                </div>
-                <p className="text-sm text-green-600 mt-1">
-                  Your price is locked for 24 months - no surprise increases!
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+                <input
+                  type="checkbox"
+                  id="addon-staticIp"
+                  checked={selectedAddons.staticIp}
+                  onChange={() => toggleAddon("staticIp")}
+                  className="w-5 h-5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                />
+              </label>
+            </div>
+          </div>
 
           {/* Customer Information Form */}
-          <Card className="shadow-card">
-            <CardHeader>
-              <CardTitle className="text-royal-blue">Customer Information</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="firstName">First Name</Label>
-                    <Input
-                      id="firstName"
-                      value={customerInfo.firstName}
-                      onChange={(e) => handleInputChange("firstName", e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="lastName">Last Name</Label>
-                    <Input
-                      id="lastName"
-                      value={customerInfo.lastName}
-                      onChange={(e) => handleInputChange("lastName", e.target.value)}
-                      required
-                    />
-                  </div>
-                </div>
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <h3 className="text-lg font-semibold mb-4">Customer Information</h3>
 
-                <div>
-                  <Label htmlFor="email">Email Address</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={customerInfo.email}
-                    onChange={(e) => handleInputChange("email", e.target.value)}
-                    required
-                  />
-                </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              <div>
+                <Label htmlFor="fullName">Full Name *</Label>
+                <Input
+                  id="fullName"
+                  value={customerInfo.fullName}
+                  onChange={(e) =>
+                    handleInputChange("fullName", e.target.value)
+                  }
+                  required
+                  placeholder="John Doe"
+                />
+              </div>
 
-                <div>
-                  <Label htmlFor="phone">Phone Number</Label>
-                  <Input
-                    id="phone"
-                    type="tel"
-                    value={customerInfo.phone}
-                    onChange={(e) => handleInputChange("phone", e.target.value)}
-                    required
-                  />
-                </div>
+              <div>
+                <Label htmlFor="email">Email *</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={customerInfo.email}
+                  onChange={(e) => handleInputChange("email", e.target.value)}
+                  required
+                  placeholder="john@example.com"
+                />
+              </div>
 
-                <div>
-                  <Label htmlFor="address">Installation Address</Label>
-                  <Input
-                    id="address"
-                    value={customerInfo.address}
-                    onChange={(e) => handleInputChange("address", e.target.value)}
-                    placeholder="Full address including postcode"
-                    required
-                  />
-                </div>
+              <div>
+                <Label htmlFor="password">Password *</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={customerInfo.password}
+                  onChange={(e) =>
+                    handleInputChange("password", e.target.value)
+                  }
+                  required
+                />
+              </div>
 
-                <Separator />
+              <div>
+                <Label htmlFor="phone">Phone *</Label>
+                <Input
+                  id="phone"
+                  type="tel"
+                  value={customerInfo.phone}
+                  onChange={(e) => handleInputChange("phone", e.target.value)}
+                  required
+                  placeholder="+44 123 456 7890"
+                />
+              </div>
 
-                <div className="space-y-4">
-                  <h3 className="font-semibold text-royal-blue flex items-center">
-                    <CreditCard className="h-5 w-5 mr-2" />
-                    Payment Method
-                  </h3>
+              <div className="sm:col-span-2">
+                <Label htmlFor="address">Installation Address *</Label>
+                <Input
+                  id="address"
+                  value={customerInfo.address}
+                  onChange={(e) => handleInputChange("address", e.target.value)}
+                  required
+                  placeholder="123 Main St, City, Postcode"
+                />
+              </div>
+            </div>
 
-                  <div className="bg-blue-50 p-4 rounded-lg">
-                    <p className="text-sm text-royal-blue">
-                      <strong>Cardless Payment System</strong>
-                      <br />
-                      You'll receive payment instructions via email after confirming your order. No card details
-                      required now!
-                    </p>
-                  </div>
-                </div>
+            {error && <div className="text-red-500 text-sm mt-2">{error}</div>}
 
-                <Button
-                  type="submit"
-                  className="w-full gold text-royal-blue hover:bg-yellow-400 btn-3d"
-                  disabled={isProcessing}
-                >
-                  {isProcessing ? "Processing..." : "Confirm Order"}
-                </Button>
+            {/* Submit button moved inside form for accessibility */}
+            <Button
+              type="submit"
+              disabled={!isFormValid || isLoading}
+              className="w-full py-6 text-base font-normal mt-6"
+            >
+              {isLoading ? (
+                <span>Processing...</span>
+              ) : (
+                <>
+                  <span>Pay with </span>
+                  <span className="font-bold">GO</span>
+                  <span>CARDLESS</span>
+                </>
+              )}
+            </Button>
+            <GoCardlessPayButton />
+          </form>
+        </section>
 
-                <p className="text-xs text-gray-500 text-center">
-                  By confirming your order, you agree to our Terms of Service and Privacy Policy.
-                </p>
-              </form>
-            </CardContent>
-          </Card>
-        </div>
+        {/* Right side - Order Summary */}
+        <aside className="bg-white p-6 sm:p-8 rounded-md shadow-md sticky top-12 h-fit">
+          <h3 className="text-xl font-semibold mb-6">Order Summary</h3>
+
+          <div className="space-y-4 mb-6">
+            <div className="flex justify-between">
+              <span className="text-gray-600">Package:</span>
+              <span className="font-medium">
+                £{selectedPackage?.price.toFixed(2)}/mo
+              </span>
+            </div>
+
+            {selectedAddons.router && (
+              <div className="flex justify-between">
+                <span className="text-gray-600">Router:</span>
+                <span className="font-medium">
+                  £{addons.router.price.toFixed(2)}
+                </span>
+              </div>
+            )}
+
+            {selectedAddons.staticIp && (
+              <div className="flex justify-between">
+                <span className="text-gray-600">Static IP:</span>
+                <span className="font-medium">
+                  £{addons.staticIp.price.toFixed(2)}/mo
+                </span>
+              </div>
+            )}
+
+            {discount > 0 && (
+              <div className="flex justify-between text-green-600">
+                <span>Discount:</span>
+                <span>-{(discount * 100).toFixed(0)}%</span>
+              </div>
+            )}
+          </div>
+
+          <Separator className="my-4" />
+
+          <div className="flex justify-between font-semibold text-lg mb-6">
+            <span>Total:</span>
+            <span>£{discountedSubscriptionPrice.toFixed(2)}</span>
+          </div>
+
+          <div className="mb-6">
+            <Label htmlFor="promoCode">Promo Code</Label>
+            <div className="flex gap-2 mt-2">
+              <Input
+                id="promoCode"
+                placeholder="Enter promo code"
+                value={promoCode}
+                onChange={(e) => setPromoCode(e.target.value)}
+                className="flex-1"
+              />
+              <Button onClick={applyPromo} variant="outline" type="button">
+                Apply
+              </Button>
+            </div>
+          </div>
+
+          <div className="mt-4 text-xs text-gray-500">
+            By completing your purchase, you agree to our Terms of Service and
+            Privacy Policy.
+          </div>
+        </aside>
       </div>
     </main>
-  )
+  );
 }
