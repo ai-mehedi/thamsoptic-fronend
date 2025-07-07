@@ -9,7 +9,6 @@ export async function GET() {
     const subscriptions = await Subscription.find().populate('userId packageId');
     return NextResponse.json(subscriptions);
 }
-
 export async function POST(req: Request) {
     await dbConnect();
     const body = await req.json();
@@ -19,12 +18,10 @@ export async function POST(req: Request) {
         packageId,
         baseAmount,
         staticIp,
+        totalPrice, // <-- accept totalPrice from client
         paymentId,
         startDate = new Date(),
     } = body;
-
-    const staticIpPrice = staticIp ? 7 : 0;
-    const totalPrice = baseAmount + staticIpPrice;
 
     const nextPaymentDate = new Date(startDate);
     nextPaymentDate.setMonth(nextPaymentDate.getMonth() + 1);
@@ -35,7 +32,7 @@ export async function POST(req: Request) {
         packageId,
         baseAmount,
         staticIp,
-        totalPrice,
+        totalPrice, // Use client-sent totalPrice
         paymentId,
         startDate,
         nextPaymentDate,

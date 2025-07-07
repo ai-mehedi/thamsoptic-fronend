@@ -13,6 +13,7 @@ import {
   Phone,
 } from "lucide-react";
 import { signOut, useSession } from "next-auth/react";
+import { use, useEffect, useState } from "react";
 
 // Mock user data - in a real app, this would come from an API
 const userData = {
@@ -35,7 +36,47 @@ const userData = {
 };
 
 export default function DashboardPage() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
+  type Subscription = {
+    packageId: {
+      title: string;
+      downloadSpeed: string;
+      status: string;
+      price: number;
+    };
+    subscriptionId: string;
+    startDate: Date;
+
+    invoices: [
+      {
+        invoiceId: string;
+        amount: number;
+        status: string;
+        paymentLink: string;
+        createdAt: Date;
+        paidAt?: Date;
+      }
+    ];
+  };
+
+  const [subscriptionData, setSubscriptionData] = useState<Subscription[]>([]);
+  useEffect(() => {
+    if (status !== "authenticated") return;
+
+    const fetchSubscriptionData = async () => {
+      const response = await fetch(
+        `/api/subscriptiongetbyusers/${session?.user.id}`
+      );
+      if (!response.ok) {
+        console.error("Failed to fetch subscription data");
+        return;
+      }
+      const data = await response.json();
+      setSubscriptionData(data);
+      console.log("Fetched subscription data:", data);
+    };
+    fetchSubscriptionData();
+  }, [session, status]);
 
   return (
     <main className="min-h-screen py-24 bg-gray-50">
@@ -56,7 +97,6 @@ export default function DashboardPage() {
             <Card className="shadow-card">
               <CardHeader>
                 <CardTitle className="text-royal-blue flex items-center">
-                  <Wifi className="h-5 w-5 mr-2" />
                   Current Package
                 </CardTitle>
               </CardHeader>
@@ -64,33 +104,21 @@ export default function DashboardPage() {
                 <div className="flex justify-between items-start mb-4">
                   <div>
                     <h3 className="text-2xl font-bold text-royal-blue">
-                      {userData.package.name}
+                      {subscriptionData[0]?.packageId.title}
                     </h3>
                     <p className="text-gray-600">
-                      {userData.package.speed} broadband
+                      {subscriptionData[0]?.packageId.downloadSpeed} Mbit/s
                     </p>
                     <Badge className="mt-2 bg-green-100 text-green-800">
-                      {userData.accountStatus}
+                      {subscriptionData[0]?.packageId.status}
                     </Badge>
                   </div>
                   <div className="text-right">
                     <div className="text-2xl font-bold text-royal-blue">
-                      £{userData.package.price}
+                      £{subscriptionData[0]?.packageId.price}
                     </div>
                     <div className="text-sm text-gray-600">per month</div>
                   </div>
-                </div>
-
-                <div className="flex space-x-4">
-                  <Button className="gold text-royal-blue hover:bg-yellow-400">
-                    Upgrade Package
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="border-royal-blue text-royal-blue bg-transparent"
-                  >
-                    View Details
-                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -149,33 +177,35 @@ export default function DashboardPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between py-2 border-b">
-                    <div>
-                      <p className="font-medium">Payment Processed</p>
-                      <p className="text-sm text-gray-600">
-                        Monthly subscription - £{userData.package.price}
-                      </p>
+                  {subscriptionData[0]?.invoices.map((invoice, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center justify-between py-2 border-b"
+                    >
+                      <div>
+                        <p className="font-medium">Payment Processed</p>
+                        <p className="text-sm text-gray-600">
+                          Invoice ID: {invoice?.invoiceId}
+                        </p>
+                        <p className="text-sm text-gray-600">
+                          Monthly subscription - £
+                          {(invoice?.amount / 100).toFixed(2)}
+                        </p>
+                      </div>
+                      <div className="text-sm text-gray-500">
+                        {invoice?.paidAt
+                          ? new Date(invoice.paidAt).toLocaleDateString(
+                              "en-GB",
+                              {
+                                year: "numeric",
+                                month: "long",
+                                day: "numeric",
+                              }
+                            )
+                          : "Not paid"}
+                      </div>
                     </div>
-                    <div className="text-sm text-gray-500">Jan 15, 2024</div>
-                  </div>
-                  <div className="flex items-center justify-between py-2 border-b">
-                    <div>
-                      <p className="font-medium">Service Update</p>
-                      <p className="text-sm text-gray-600">
-                        Router firmware updated
-                      </p>
-                    </div>
-                    <div className="text-sm text-gray-500">Jan 10, 2024</div>
-                  </div>
-                  <div className="flex items-center justify-between py-2">
-                    <div>
-                      <p className="font-medium">Welcome Email Sent</p>
-                      <p className="text-sm text-gray-600">
-                        Account setup completed
-                      </p>
-                    </div>
-                    <div className="text-sm text-gray-500">Aug 15, 2023</div>
-                  </div>
+                  ))}
                 </div>
               </CardContent>
             </Card>
@@ -202,7 +232,9 @@ export default function DashboardPage() {
                 </div>
                 <div>
                   <p className="text-sm text-gray-600">Subscription ID</p>
-                  <p className="font-mono text-sm">{userData.subscriptionId}</p>
+                  <p className="font-mono text-sm">
+                    {subscriptionData[0]?.subscriptionId}
+                  </p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-600">Member Since</p>
@@ -248,18 +280,27 @@ export default function DashboardPage() {
               <CardContent>
                 <div className="text-center">
                   <div className="text-2xl font-bold text-royal-blue mb-2">
-                    £{userData.package.price}
+                    £{subscriptionData[0]?.packageId.price}
                   </div>
                   <div className="flex items-center justify-center text-gray-600 mb-4">
                     <Calendar className="h-4 w-4 mr-2" />
-                    {new Date(userData.nextPayment).toLocaleDateString(
-                      "en-GB",
-                      {
+                    {(() => {
+                      const startDate = new Date(
+                        subscriptionData[0]?.startDate
+                      );
+                      if (!startDate) return null;
+
+                      // Add 30 days (30 * 24 * 60 * 60 * 1000 ms)
+                      const endDate = new Date(
+                        startDate.getTime() + 30 * 24 * 60 * 60 * 1000
+                      );
+
+                      return endDate.toLocaleDateString("en-GB", {
                         year: "numeric",
                         month: "long",
                         day: "numeric",
-                      }
-                    )}
+                      });
+                    })()}
                   </div>
                   <Button
                     variant="outline"

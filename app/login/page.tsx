@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Eye, EyeOff, Wifi } from "lucide-react";
 import { signIn } from "next-auth/react";
+import Image from "next/image";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -60,9 +61,10 @@ export default function LoginPage() {
     <main className="flex-1 flex items-center justify-center py-24 bg-gray-50">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="w-16 h-16 mx-auto mb-4 royal-blue rounded-2xl flex items-center justify-center">
-            <Wifi className="h-8 w-8 text-white" />
-          </div>
+         <div className=" mx-auto mb-4  rounded-2xl flex items-center justify-center">
+                  <Image src={"/logo/virticlelogo.svg"} alt="Logo" width={150} height={200} />
+                  
+                </div>
           <h1 className="text-3xl font-bold text-royal-blue mb-2">
             Welcome Back
           </h1>

@@ -112,6 +112,14 @@ const SubscriptionSchema = new Schema<ISubscription>({
 
 });
 
+SubscriptionSchema.pre('save', function (next) {
+    if (!this.endDate) {
+        const start = this.startDate || new Date();
+        this.endDate = new Date(start.getTime() + 30 * 24 * 60 * 60 * 1000); // +30 days
+    }
+    next();
+});
+
 // ----------------------------
 // Export Model
 // ----------------------------

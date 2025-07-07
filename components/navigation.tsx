@@ -19,9 +19,9 @@ export function Navigation() {
   const navItems = [
     { href: "/", label: "Home" },
     { href: "/packages", label: "Packages" },
-    { href: "/about", label: "About Us" },
-    { href: "/why-choose-us", label: "Why Choose Us" },
-    { href: "/testimonials", label: "Testimonials" },
+    { href: "#abouteus", label: "About Us" },
+    { href: "#why-choose-us", label: "Why Choose Us" },
+    { href: "#testimonials", label: "Testimonials" },
     { href: "/contact", label: "Contact" },
   ];
 
@@ -31,7 +31,7 @@ export function Navigation() {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <Link href="/" className="flex items-center space-x-2">
-            <Image src={"/logo.png"} alt="Logo" width={180} height={80} />
+            <Image src={"/logo/logo.svg"} alt="Logo" width={180} height={80} />
           </Link>
 
           {/* Desktop Navigation */}

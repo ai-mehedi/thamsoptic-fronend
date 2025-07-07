@@ -85,7 +85,7 @@ export function Hero() {
   };
 
   return (
-    <section className="relative min-h-[90vh] flex items-center overflow-hidden">
+    <section id="Herosection" className="relative min-h-[90vh] flex items-center overflow-hidden">
       {/* Background with gradient and pattern */}
       <div className="absolute inset-0 royal-blue">
         <div className="absolute inset-0 bg-[url('/heroimage.jpg')] bg-cover bg-center bg-no-repeat">

@@ -15,6 +15,7 @@ export interface IOrder extends Document {
     totalAmount: number;
     createdAt: Date;
     updatedAt: Date;
+    shippingAddress?: string;
 }
 
 const OrderSchema = new Schema<IOrder>(
@@ -43,6 +44,9 @@ const OrderSchema = new Schema<IOrder>(
             enum: ['unpaid', 'paid', 'failed'],
             default: 'unpaid',
         },
+        shippingAddress: {
+            type: String,
+        }
     },
     { timestamps: true }
 );

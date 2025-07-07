@@ -8,6 +8,7 @@ import { Separator } from "@/components/ui/separator";
 import { useSearchParams, useRouter } from "next/navigation";
 import { create } from "domain";
 import GoCardlessPayButton from "@/components/GoCardlessPayButton";
+import { useSession } from "next-auth/react";
 
 interface Addon {
   name: string;
@@ -59,6 +60,7 @@ export default function CheckoutPage() {
       staticIp: false,
     }
   );
+  const { data: session, status } = useSession();
 
   const [customerInfo, setCustomerInfo] = useState({
     fullName: "",
@@ -112,14 +114,17 @@ export default function CheckoutPage() {
     // Subscription subtotal includes base package + static IP monthly price
     const subscriptionSubtotal = basePrice + staticIpPrice;
 
+    const totalpackages = basePrice + staticIpPrice + routerPrice;
+
     // Discount applies only to subscription subtotal (not one-time router fee)
     const discountedSubscriptionPrice = subscriptionSubtotal * (1 - discount);
 
     // Total includes discounted subscription + router one-time fee
-    const total = discountedSubscriptionPrice + routerPrice;
+    const total = discountedSubscriptionPrice + routerPrice + staticIpPrice;
 
     return {
       subscriptionSubtotal,
+      totalpackages,
       discountedSubscriptionPrice,
       routerPrice,
       total,
@@ -131,6 +136,7 @@ export default function CheckoutPage() {
     discountedSubscriptionPrice,
     routerPrice,
     total,
+    totalpackages,
   } = calculatePrices();
 
   async function startPayment(
@@ -151,8 +157,8 @@ export default function CheckoutPage() {
           description: selectedPackage?.title || "Order Payment",
           userid: userid,
           packageId: packageId,
-          subscriptionId:subscriptionId,
-          orderId:orderId,
+          subscriptionId: subscriptionId,
+          orderId: orderId,
         }),
       });
       const data = await res.json();
@@ -184,6 +190,17 @@ export default function CheckoutPage() {
       [key]: !prev[key],
     }));
   };
+
+  useEffect(() => {
+    if (session?.user) {
+      setCustomerInfo((prev) => ({
+        ...prev,
+        fullName: session.user.name || prev.fullName,
+        email: session.user.email || prev.email,
+        // Phone and address probably not in session, so leave as is
+      }));
+    }
+  }, [session]);
 
   const handleInputChange = (
     field: keyof typeof customerInfo,
@@ -218,27 +235,37 @@ export default function CheckoutPage() {
     setIsLoading(true);
 
     try {
-      const userssignup = {
-        fullname: customerInfo.fullName,
-        email: customerInfo.email,
-        password: customerInfo.password,
-        phone: customerInfo.phone,
-        address: customerInfo.address,
-      };
+      let userId: string;
 
-      // Send user signup data to backend
-      const signupResponse = await fetch("/api/auth/signup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(userssignup),
-      });
-      if (!signupResponse.ok) {
-        throw new Error("User signup failed");
+      if (session?.user && session.user.id) {
+        // User is logged in
+        userId = session.user.id;
+      } else {
+        // User not logged in, do signup first
+        const userssignup = {
+          fullname: customerInfo.fullName,
+          email: customerInfo.email,
+          password: customerInfo.password,
+          phone: customerInfo.phone,
+          address: customerInfo.address,
+        };
+
+        const signupResponse = await fetch("/api/auth/signup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(userssignup),
+        });
+
+        if (!signupResponse.ok) {
+          throw new Error("User signup failed");
+        }
+
+        const signupResult = await signupResponse.json();
+        userId = signupResult.user._id;
       }
-      const signupResult = await signupResponse.json();
 
       const subscription = {
-        userId: signupResult.user._id, // Assuming the signup response contains user ID
+        userId: userId, // Assuming the signup response contains user ID
         packageId: selectedPackage?._id,
         baseAmount: selectedPackage?.price || 0,
         staticIp: selectedAddons.staticIp,
@@ -254,10 +281,10 @@ export default function CheckoutPage() {
         throw new Error("Subscription creation failed");
       }
       const subscriptionResult = await subscriptionResponse.json();
-
+      console.log("Subscription Result:", subscriptionResult);
       // Prepare order payload
       const orderPayload = {
-        userId: signupResult.user._id, // Assuming the signup response contains user ID
+        userId: userId, // Assuming the signup response contains user ID
         packageId: selectedPackage?._id,
         subscriptionId: subscriptionResult._id,
         fullName: customerInfo.fullName,
@@ -267,9 +294,10 @@ export default function CheckoutPage() {
         address: customerInfo.address,
         router: selectedAddons.router,
         staticIp: selectedAddons.staticIp,
-        totalAmount: total,
+        totalAmount: totalpackages,
         status: "pending",
         paymentStatus: "unpaid",
+        shippingAddress: customerInfo.address,
       };
 
       // Send order to backend
@@ -286,14 +314,14 @@ export default function CheckoutPage() {
       const orderResult = await orderResponse.json();
       console.log(
         "Order Result:",
-        signupResult.user._id,
+        userId,
         subscriptionResult._id,
         orderResult.order._id
       );
 
       if (selectedPackage) {
         startPayment(
-          signupResult.user._id,
+          userId,
           selectedPackage._id,
           subscriptionResult._id,
           orderResult.order._id
@@ -417,7 +445,7 @@ export default function CheckoutPage() {
                     handleInputChange("fullName", e.target.value)
                   }
                   required
-                  placeholder="John Doe"
+                  placeholder="Full Name"
                 />
               </div>
 
@@ -429,7 +457,7 @@ export default function CheckoutPage() {
                   value={customerInfo.email}
                   onChange={(e) => handleInputChange("email", e.target.value)}
                   required
-                  placeholder="john@example.com"
+                  placeholder="Email Address"
                 />
               </div>
 
@@ -454,7 +482,7 @@ export default function CheckoutPage() {
                   value={customerInfo.phone}
                   onChange={(e) => handleInputChange("phone", e.target.value)}
                   required
-                  placeholder="+44 123 456 7890"
+                  placeholder="Phone Number"
                 />
               </div>
 
@@ -465,7 +493,7 @@ export default function CheckoutPage() {
                   value={customerInfo.address}
                   onChange={(e) => handleInputChange("address", e.target.value)}
                   required
-                  placeholder="123 Main St, City, Postcode"
+                  placeholder="Address for installation"
                 />
               </div>
             </div>
@@ -534,7 +562,7 @@ export default function CheckoutPage() {
 
           <div className="flex justify-between font-semibold text-lg mb-6">
             <span>Total:</span>
-            <span>£{discountedSubscriptionPrice.toFixed(2)}</span>
+            <span>£{totalpackages.toFixed(2)}</span>
           </div>
 
           <div className="mb-6">

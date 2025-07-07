@@ -10,7 +10,7 @@ export function Footer() {
           {/* Company Info */}
           <div className="space-y-4">
             <div className="flex items-center space-x-2">
-              <Image src={"/logo.png"} alt="Logo" width={180} height={80} />
+              <Image src={"/logo/logo.svg"} alt="Logo" width={180} height={80} />
             </div>
             <p className="text-gray-300 leading-relaxed">
               Providing fast, reliable broadband to homes and businesses across

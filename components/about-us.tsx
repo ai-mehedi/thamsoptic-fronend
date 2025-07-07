@@ -26,7 +26,7 @@ const stats = [
 
 export function AboutUs() {
   return (
-    <section className="py-24 bg-gradient-to-br from-gray-50 to-white">
+    <section id="abouteus" className="py-24 bg-gradient-to-br from-gray-50 to-white">
       <div className="container mx-auto px-4">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
           <div className="order-2 lg:order-1">

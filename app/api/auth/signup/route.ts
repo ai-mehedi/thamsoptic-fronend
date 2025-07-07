@@ -40,6 +40,7 @@ export async function POST(req: NextRequest, res: NextResponse) {
         password: hashedPassword,
     });
     await newUser.save();
+
     return NextResponse.json(
         { message: 'User Creat Succesfully', user: newUser },
         { status: 200 }
