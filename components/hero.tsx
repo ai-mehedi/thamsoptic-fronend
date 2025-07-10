@@ -18,6 +18,10 @@ import { Search, Zap, Shield, Clock } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 export function Hero() {
+
+  
+
+
   const [postcode, setPostcode] = useState("");
   const [addresses, setAddresses] = useState<string[]>([]);
   const [selectedAddress, setSelectedAddress] = useState("");
